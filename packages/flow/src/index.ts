@@ -1,6 +1,6 @@
-import Flow from './core/index';
+import Flob, { DefaultData } from './core/index';
 import { GetDataType } from './types/index';
 
-export default function getFlow<D extends Object>(getData: GetDataType<D>) {
-  return new Flow<D>(getData);
+export default function getFlob<G extends GetDataType<DefaultData>>(getData: G) {
+  return new Flob<G>(getData);
 }

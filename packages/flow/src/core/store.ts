@@ -1,7 +1,7 @@
-import Flow from ".";
+import Flob from ".";
 
 interface Store {
-  CURRENT_RUNNING_FLOW?: Flow<Object>;
+  CURRENT_RUNNING_FLOW?: Flob<Object>;
 }
 
 export const store: Store = {

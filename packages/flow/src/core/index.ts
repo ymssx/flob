@@ -1,41 +1,77 @@
 import { GetDataType } from '../types/index';
-import { getFlowProxy } from './proxy';
+import { getFlobProxy } from './proxy';
 import { store } from './store';
 
-export default class Flow<D extends Object> {
-  _value: D;
+export type DefaultData = Record<string, any>;
 
-  _getData: GetDataType<D>;
+/**
+ * 自定义类型守卫函数
+ */
+function isFunction(func: any): func is Function {
+  return typeof func === 'function';
+}
+function isPromise(obj: any): obj is Promise<any> {
+  return obj instanceof Promise;
+}
 
-  relateFlows: {
-    [key in keyof D]?: Set<Flow<Object>>
-  } = {};
+function afterUpdate<G extends GetDataType<DefaultData>, E>(flob: Flob<G>, callback: () => E): PD<G, E> {
+  const updateRes = flob.updateData();
+  if (isPromise(updateRes)) {
+    return updateRes.then(() => callback()) as PD<G, E>; 
+  }
+  return callback() as PD<G, E>;
+}
 
-  constructor(getData: GetDataType<D>) {
+export type D<G extends GetDataType<DefaultData>> = G extends GetDataType<infer D>
+  ? D extends Promise<infer PD>
+    ? PD
+    : D
+  : never;
+
+export type PD<G extends GetDataType<DefaultData>, R = D<G>> = G extends (...args: any[]) => Promise<any> ? Promise<R> : R;
+
+export default class Flob<
+  G extends GetDataType<DefaultData> = GetDataType<DefaultData>,
+> {
+  _data: D<G> | null = null;
+
+  _getData: G;
+
+  relateFlobs: Record<string, Set<Flob>> = {};
+
+  constructor(getData: G) {
     this._getData = getData;
-    this.updateData();
+    // this.updateData();
   }
 
-  async updateData() {
-    if (this._getData instanceof Function) {
+  updateData() {
+    const getDataFunc = this._getData;
+    if (isFunction(getDataFunc)) {
       store.CURRENT_RUNNING_FLOW = this;
-      const newData = this._getData();
-      if (newData instanceof Promise) {
-        this._value = await newData;
+      const newData = getDataFunc();
+      if (isPromise(newData)) {
+        return newData
+          .then((res) => {
+            this._data = res;
+          })
+          .finally(() => {
+            store.CURRENT_RUNNING_FLOW = undefined;
+          });
       } else {
-        this._value = newData;
+        this._data = newData;
+        store.CURRENT_RUNNING_FLOW = undefined;
       }
-      store.CURRENT_RUNNING_FLOW = undefined;
-    } else {
-      this._value = this._getData;
+    } else if (!this._data) {
+      this._data = getDataFunc as D<G>;
     }
+    return;
   }
 
-  addRelateFlow(key: string, flow: Flow<Object>) {
-    if (!this.relateFlows[key]) {
-      this.relateFlows[key] = new Set();
+  addRelateFlob(key: string, flob: Flob) {
+    if (!this.relateFlobs[key]) {
+      this.relateFlobs[key] = new Set();
     }
-    this.relateFlows[key]?.add(flow);
+    this.relateFlobs[key]?.add(flob);
   }
 
   update(key: string, value: any) {
@@ -43,21 +79,35 @@ export default class Flow<D extends Object> {
     this.updateData();
   }
 
-  get() {
-    return getFlowProxy(this);
+  /**
+   * 输出一个可靠的data数据，如果没有被初始化，那么会直接报错
+   * 通过这种方式引入data，不会记录依赖关系
+   */
+  public get data() {
+    if (!this._data) {
+      throw new Error('this data has not init');
+    }
+    return this._data;
   }
 
-  set(newData: Partial<D>) {
-    this._value = {
-      ...this._value,
-      ...newData,
-    };
-    for (const key in newData) {
-      const relateFlows = this.relateFlows[key];
-      if (relateFlows) {
-        relateFlows.forEach(item => item.update(key, newData[key]));
+  get() {
+    return afterUpdate<G, D<G>>(this, () => getFlobProxy(this));
+  }
+
+  set(newData: Partial<D<G>>) {
+    return afterUpdate<G, D<G>>(this, () => {
+      this._data = {
+        ...this.data,
+        ...newData,
+      };
+      for (const key in newData) {
+        const relateFlobs = this.relateFlobs[key];
+        if (relateFlobs) {
+          relateFlobs.forEach(item => item.update(key, newData[key]));
+        }
       }
-    }
+      return this.data;
+    });
   }
 
   on() {}

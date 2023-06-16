@@ -1,10 +1,10 @@
 {
-  "name": "flow",
+  "name": "flob",
   "version": "0.0.1",
-  "description": "",
+  "description": "object flow",
   "main": "index.js",
   "scripts": {
-    "test": "rm -rf dist && tsc; node ./dist/test.js"
+    "test": "jest"
   },
   "author": "",
   "license": "ISC"

@@ -1,14 +1,15 @@
-import Flow from ".";
+import Flob, { DefaultData, D } from '.';
+import { GetDataType } from '../types';
 import { store } from './store';
 
-export function getFlowProxy<D extends Object>(flow: Flow<D>) {
-  return new Proxy(flow, {
-    get(target, key: string) {
+export function getFlobProxy<G extends GetDataType<DefaultData>>(flob: Flob<G>) {
+  return new Proxy<D<G>>(flob.data, {
+    get(_, key: string) {
       if (store.CURRENT_RUNNING_FLOW) {
-        target.addRelateFlow(key, store.CURRENT_RUNNING_FLOW);
+        flob.addRelateFlob(key, store.CURRENT_RUNNING_FLOW);
       }
 
-      return target._value[key];
+      return flob.data[key];
     }
   });
 }
